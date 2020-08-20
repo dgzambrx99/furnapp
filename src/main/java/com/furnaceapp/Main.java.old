@@ -1,0 +1,234 @@
+package com.furnaceapp;
+
+import java.io.File;
+import java.util.Date;
+import java.sql.*;
+import javax.sql.DataSource;
+import javax.swing.*;
+import java.util.*;
+import java.io.IOException;
+import java.nio.file.*;
+import static java.nio.file.StandardWatchEventKinds.*;
+import static java.nio.file.LinkOption.*;
+import java.nio.file.attribute.*;
+import java.text.SimpleDateFormat;
+import org.apache.http.*;
+import org.apache.http.client.*;
+import org.apache.http.client.methods.*;
+import org.apache.http.impl.client.*;
+import org.apache.http.message.*;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.log4j.*;
+import org.apache.commons.dbcp2.BasicDataSource;
+import org.apache.commons.codec.digest.DigestUtils;
+import com.mchange.v2.c3p0.*;
+import com.furnaceapp.file.FileHierarchy;
+import com.furnaceapp.excel.ExcelFile;
+
+//delete from checktable ; delete from shippinginput;
+//select * from checktable \G select * from shippinginput \G
+//alter table shippinginput add which int(11) not null default 0;
+//mvn install:install-file -Dfile=SX.jar -DgroupId=com.smartxls -DartifactId=smartxls -Dversion=4.0.2 -Dpackaging=jar
+
+public class Main implements IDirectoryEventCallback {
+	private static Logger logger = Logger.getLogger( Main.class );
+	public static final String EXCEL_DATE_TIME_FORMAT = "yyyy/MM/dd HH:mm:ss";
+	private static final int EXCEL_START_ROW = 40;
+	private static final boolean USE_ALL_ROWS_OR_JUST_ONE = true;
+	private ComboPooledDataSource cpds;
+	private BasicDataSource dataSource;
+	private ConfigFile config;
+	private int delayBetweenLoops;
+	private String baseDir, dataTableName;
+
+	public void processFile( WatchEvent.Kind kind, Path path ) throws Exception {
+		Connection conn = null;
+		PreparedStatement ps = null;
+
+		if ( !( kind == ENTRY_CREATE || kind == ENTRY_MODIFY ) ) {
+			return;
+		}
+
+		if ( !path.toString().toLowerCase().endsWith( ".xlsx" ) ) {
+			return;
+		}
+
+		long startTime = System.currentTimeMillis();
+
+		File file = path.toFile();
+		long fileLen = file.length();
+		if ( fileLen < 1000L ) {
+			logger.info( "not processing " + path + " because fileLen=" + fileLen );
+			return;
+		}
+
+		FileHierarchy fileHierarchy = new FileHierarchy( file );
+		ExcelFile excelFile = new ExcelFile( file, USE_ALL_ROWS_OR_JUST_ONE );
+
+		try {
+			//conn = getConnection();
+			conn = getConnectionC3P0();
+
+			ps = conn.prepareStatement(
+									"INSERT INTO " + dataTableName + "(ts,selected,tc,mp1,mp2,lc1,lc2,lc3,which) " +
+									"VALUES(?,?,?,?,?,?,?,?,?)" );
+
+			if ( CheckTable.exists( conn, excelFile.getHash() ) ) {
+				logger.info( file.getPath() + " exists in checktable at " + excelFile.getHash() + ", skipping" );
+				return;
+			}
+
+			int currentRow = EXCEL_START_ROW;
+
+			TreeMap<String, TreeMap<String, String>> excelRows = excelFile.getProcessedValues();
+			TreeMap<String, String> excelRow = excelRows.get( "" + currentRow );
+
+			if ( excelRow == null ) {
+				logger.info( file.getPath() + " has no row 40, skipping " + excelRows.toString() );
+				return;
+			}
+
+			conn.setAutoCommit( false );
+			if ( CheckTable.upsert( conn, file.getName(), file.getPath(), excelFile.getHash() ) == 1 ) {
+				for ( int avoidInfiniteLoop = 0; avoidInfiniteLoop < 1000; avoidInfiniteLoop++ ) {
+					String dateandtime = excelRow.get( "A" ) + " " + excelRow.get( "B" );
+					java.sql.Timestamp sqlts = getSQLTimestamp( dateandtime );
+					int ts = getTimestamp( dateandtime );
+					int selected = ( ( ts % 120 ) == 0 ) ? 1 : 0;
+
+					ps.setTimestamp( 1, sqlts );
+					ps.setInt( 2, selected );
+					ps.setString( 3, excelRow.get( "D" ) );
+					ps.setString( 4, excelRow.get( "F" ) );
+					ps.setString( 5, excelRow.get( "H" ) );
+					ps.setString( 6, excelRow.get( "J" ) );
+					ps.setString( 7, excelRow.get( "L" ) );
+					ps.setString( 8, excelRow.get( "N" ) );
+					ps.setInt( 9, fileHierarchy.getFolderNumber() );
+
+					ps.execute();
+
+					currentRow++;
+					excelRow = excelRows.get( "" + currentRow );
+					if ( excelRow == null ) {
+						logger.info( "stopped processing due to null row at " + currentRow );
+						break;
+					}
+				}
+
+				conn.commit();
+				logger.info( "successfully inserted " + file.getName() );
+			}
+			else {
+				logger.info( "skipped " + file.getName() + " as a duplicate" );
+			}
+		}
+		finally {
+			try { if (ps != null) ps.close(); } catch(Exception e) { }
+			try { if (conn != null) conn.close(); } catch(Exception e) { }
+		}
+
+		long endTime = System.currentTimeMillis();
+
+		logger.info( "processed in " + ( endTime - startTime ) + " milliseconds" );
+
+		if ( delayBetweenLoops > 0 ) {
+			pauseFor( delayBetweenLoops );
+		}
+	}
+
+	public java.sql.Timestamp getSQLTimestamp( String dateandtime ) throws Exception {
+		try {
+			SimpleDateFormat format = new SimpleDateFormat( EXCEL_DATE_TIME_FORMAT );
+			java.util.Date newDate = format.parse( dateandtime );
+			return new java.sql.Timestamp( newDate.getTime() );
+		}
+		catch ( Exception e ) {
+			logger.info( "Unable to parse " + dateandtime + " (as " + EXCEL_DATE_TIME_FORMAT + ")" );
+			throw e;
+		}
+	}
+
+	public int getTimestamp( String dateandtime ) throws Exception {
+		try {
+			SimpleDateFormat format = new SimpleDateFormat( EXCEL_DATE_TIME_FORMAT );
+			java.util.Date newDate = format.parse( dateandtime );
+			return (int) ( newDate.getTime() / 1000L );
+		}
+		catch ( Exception e ) {
+			logger.info( "Unable to parse " + dateandtime + " (as " + EXCEL_DATE_TIME_FORMAT + ")" );
+			throw e;
+		}
+	}
+
+	public static void main(String[] args) throws Exception {
+		new Main();
+	}
+
+	public Main() {
+		try {
+			config = new ConfigFile();
+			//createDatabasePool();
+			createDatabasePoolC3P0();
+			delayBetweenLoops = config.getInt( "furnaceapp.delay_between_loops" );
+			baseDir = config.getString( "furnaceapp.base_dir" );
+			dataTableName = config.getString( "furnaceapp.data_table_name" );
+
+			logger.info( "Running..." );
+
+			Path dir = Paths.get( baseDir ).toAbsolutePath();
+			new WatchDir( dir, true ).processEvents( this );
+		}
+		catch ( Exception e ) {
+			logger.error( "Main caught", e );
+		}
+	}
+
+	private Connection getConnection() throws SQLException {
+		return dataSource.getConnection();
+	}
+
+	private Connection getConnectionC3P0() throws SQLException {
+		return cpds.getConnection();
+	}
+
+	private void createDatabasePoolC3P0() throws Exception {
+		cpds = new ComboPooledDataSource();
+
+		String driverClassName = config.getString( "furnaceapp.db_driver_class_name.mssql" );
+		String username = config.getString( "furnaceapp.db_username.mssql" );
+		String password = config.getString( "furnaceapp.db_password.mssql" );
+		String connectionUrl = config.getString( "furnaceapp.db_connection_url.mssql" );
+
+		cpds.setDriverClass( driverClassName );
+		cpds.setJdbcUrl( connectionUrl );
+		cpds.setUser( username );
+		cpds.setPassword( password );
+	}
+
+	private void createDatabasePool() throws Exception {
+		dataSource = new BasicDataSource();
+
+		String driverClassName = config.getString( "furnaceapp.db_driver_class_name.mssql" );
+		String username = config.getString( "furnaceapp.db_username.mssql" );
+		String password = config.getString( "furnaceapp.db_password.mssql" );
+		String connectionUrl = config.getString( "furnaceapp.db_connection_url.mssql" );
+
+		dataSource.setDriverClassName( driverClassName );
+		dataSource.setUsername( username );
+		dataSource.setPassword( password );
+		dataSource.setUrl( connectionUrl );
+	}
+
+	private void pauseFor( int millis ) {
+		try {
+			Thread.sleep( millis );
+		}
+		catch ( Exception e ) {
+		}
+	}
+}
+
+

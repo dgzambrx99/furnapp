@@ -1,0 +1,105 @@
+package com.furnaceapp;
+
+import java.util.*;
+import java.io.File;
+import org.apache.log4j.*;
+import com.furnaceapp.excel.ExcelFile;
+import com.furnaceapp.grid.GridValue;
+import com.furnaceapp.grid.GridValueType;
+import junit.framework.TestCase;
+
+public class TestGridValue extends TestCase {
+	private static Logger logger = Logger.getLogger( TestGridValue.class );
+
+	public void test1() throws Exception {
+		GridValue v = new GridValue( "2015/07/16" );
+		assertEquals( "2015/07/16 is date", v.getType(), GridValueType.TYPE_DATE );
+	}
+
+	public void test2() throws Exception {
+		GridValue v = new GridValue( "flurb" );
+		assertEquals( "flurb is string", v.getType(), GridValueType.TYPE_STRING );
+	}
+
+	public void test3() throws Exception {
+		GridValue v = new GridValue( "11" );
+		assertEquals( "11 is number", v.getType(), GridValueType.TYPE_NUMBER );
+	}
+
+	public void test4() throws Exception {
+		GridValue v = new GridValue( "11.22" );
+		assertEquals( "11.22 is number", v.getType(), GridValueType.TYPE_NUMBER );
+	}
+
+	public void test5() throws Exception {
+		GridValue v = new GridValue( "10:40:28" );
+		assertEquals( "10:40:28 is date", v.getType(), GridValueType.TYPE_TIME );
+	}
+
+	public void test6() throws Exception {
+		GridValue v = new GridValue( " 2015/07/16 " );
+		assertEquals( " 2015/07/16  is date", v.getType(), GridValueType.TYPE_DATE );
+	}
+
+	public void test7() throws Exception {
+		GridValue v = new GridValue( "10:40:28 " );
+		assertEquals( "10:40:28  is time", v.getType(), GridValueType.TYPE_TIME );
+	}
+
+	public void test8() throws Exception {
+		GridValue v = new GridValue( "2015/07/16 " );
+		assertEquals( "2015/07/16  is date", v.getType(), GridValueType.TYPE_DATE );
+	}
+
+	public void test9() throws Exception {
+		GridValue v = new GridValue( "TC3" );
+		assertEquals( "TC3 is identifier", v.getType(), GridValueType.TYPE_IDENTIFIER );
+		assertEquals( "TC3 idNum is 3", v.getIDNum(), 3 );
+		assertEquals( "TC3 idName is TC", v.getIDName(), "TC" );
+	}
+
+	public void test10() throws Exception {
+		GridValue v = new GridValue( "TC A" );
+		assertEquals( "TC A is identifier", v.getType(), GridValueType.TYPE_IDENTIFIER );
+		assertEquals( "TC A idNum is 1", v.getIDNum(), 1 );
+		assertEquals( "TC A idName is TC", v.getIDName(), "TC" );
+	}
+
+	public void test11() throws Exception {
+		GridValue v = new GridValue( "TC 5" );
+		assertEquals( "TC 5 is identifier", v.getType(), GridValueType.TYPE_IDENTIFIER );
+		assertEquals( "TC 5 idNum is 5", v.getIDNum(), 5 );
+		assertEquals( "TC 5 idName is TC", v.getIDName(), "TC" );
+	}
+
+	public void test12() throws Exception {
+		GridValue v = new GridValue( "TCA" );
+		assertEquals( "TCA is string", v.getType(), GridValueType.TYPE_STRING );
+	}
+
+	public void test14() throws Exception {
+		GridValue v = new GridValue( "CONTROL TC" );
+		assertEquals( "CONTROL TC is string", v.getType(), GridValueType.TYPE_STRING );
+	}
+
+	public void test15() throws Exception {
+		GridValue v = new GridValue( "LOAD TC 1" );
+		assertEquals( "LOAD TC 1 is identifier", v.getType(), GridValueType.TYPE_IDENTIFIER );
+		assertEquals( "LOAD TC 1 idName is LOAD TC", v.getIDName(), "LOAD TC" );
+		assertEquals( "LOAD TC 1 idNum is 1", v.getIDNum(), 1 );
+	}
+
+/*
+	public static void main(String[] args) throws Exception {
+		new TestGridValue();
+	}
+
+	public void test( String s ) {
+		logger.info( "INPUT=" + s + "=" );
+		GridValue v = new GridValue( s );
+		logger.info( "TYPE=" + v.getType() + ", VAL=" + v.getValue() );
+	}
+*/
+}
+
+

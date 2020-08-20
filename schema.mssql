@@ -1,0 +1,24 @@
+;http://www.ubitsoft.com/products/t-sql-analyzer/
+
+CREATE TABLE shippinginput (
+  id INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+  ts DATETIME NOT NULL,
+  tc varchar(6) NOT NULL DEFAULT '',
+  mp1 varchar(6) NOT NULL DEFAULT '',
+  mp2 varchar(6) NOT NULL DEFAULT '',
+  lc1 varchar(6) NOT NULL DEFAULT '',
+  lc2 varchar(6) NOT NULL DEFAULT '',
+  lc3 varchar(6) NOT NULL DEFAULT '',
+  selected tinyint NOT NULL DEFAULT '0',
+  which int NOT NULL DEFAULT '0'
+);
+
+CREATE TABLE checktable (
+  id INT NOT NULL IDENTITY(1,1) PRIMARY KEY,
+  filename varchar(255) NOT NULL DEFAULT '',
+  filepath varchar(255) NOT NULL DEFAULT '',
+  hash varchar(64) NOT NULL DEFAULT '',
+  mtime int NOT NULL DEFAULT '0',
+  CONSTRAINT AK_hash UNIQUE(hash)
+);
+

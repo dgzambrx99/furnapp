@@ -1,0 +1,28 @@
+package com.furnaceapp;
+
+import java.util.*;
+import java.io.File;
+import org.apache.log4j.*;
+import com.furnaceapp.excel.ExcelFile;
+
+public class TestExcelFile {
+	private static Logger logger = Logger.getLogger( TestExcelFile.class );
+
+	public static void main(String[] args) throws Exception {
+		new TestExcelFile();
+	}
+
+	public TestExcelFile() {
+		try {
+			//File f = new File( "furnace1-0017.xlsx" );
+			File f = new File( "22/23/furnace1-001-GX20-1sec-1124.xlsx" );
+			//ExcelFile ef = new ExcelFile( f, true );
+			//System.out.println( "PROCESSED=" + ef.getProcessedValues() );
+		}
+		catch ( Exception e ) {
+			logger.error( "TestExcelFile caught", e );
+		}
+	}
+}
+
+
